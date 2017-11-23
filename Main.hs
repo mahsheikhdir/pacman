@@ -12,29 +12,70 @@ background = black
 
 -- Game data structure
 data PacmanGame = Game
-	{ pacmanLoc :: (Float, Float),
-	  time :: Float,
-	  lastMove :: Float
-	} deriving Show
+  { pacmanLoc :: (Float, Float),
+    time :: Float,
+    lastMove :: Float,
+    ended :: Bool,
+    gameMap :: [Integer]
+  } deriving Show
+
 
 
 -- Drawing each game state
 render :: PacmanGame -> Picture
-render game = 
-	pictures [pacman, clock]
-	where
-		pacman = uncurry translate (pacmanLoc game) $ color yellow $ arcSolid 45 315 15 
-		current = (time game)
-		timeString = show current
-		clock = translate 200 200 $ scale 0.25 0.25 $ color white $ text timeString
+render game =
+  pictures [walls, pacman, clock]
+  where
+    pacman = uncurry translate (pacmanLoc game) $ color yellow $ arcSolid 45 315 15
+    current = (time game)
+    timeString = show current
+    clock = translate 200 200 $ scale 0.25 0.25 $ color white $ text timeString
+    --  The bottom and top walls.
+    walls = pictures (renderWalls (gameMap game) 0)
+
+wallColor = greyN 0.5
+
+
+wall x y =
+  translate (x*25 - 125) (y*25 - 125) $
+    color wallColor $
+      rectangleSolid 25 25
+
+empty x y =
+  translate (x*25) (y*25) $
+    color black $
+      rectangleSolid 25 25
+
+
+renderWalls :: [Integer] -> Integer -> [Picture]
+
+renderWalls [] _ = []
+
+renderWalls (h:t) acc
+  | h==1 = (wall (fromIntegral (acc `div` gridWidth)) (fromIntegral (acc `mod` gridWidth))) : renderWalls t (fromIntegral (acc+1))
+  | otherwise = renderWalls t (fromIntegral (acc+1))
 
 -- Initial state of the game
 initialState :: PacmanGame
 initialState = Game
-	{ pacmanLoc = (0, 0),
-	  time = 0,
-	  lastMove = 0 -- 0 up 1 down 2 right 3 left
-	}
+  { pacmanLoc = (0, 0),
+    time = 0,
+    lastMove = 0, -- 0 up 1 down 2 right 3 left
+    ended = False,
+    gameMap = [1,1,1,1,1,1,1,1,1,1
+      ,1,0,0,0,0,1,1,0,0,1
+      ,1,1,1,1,0,1,1,0,1,1
+      ,1,1,1,1,0,1,1,0,1,1
+      ,1,1,1,1,0,1,1,0,1,1
+      ,1,1,1,1,0,1,0,0,0,1
+      ,1,1,1,1,0,1,1,1,0,1
+      ,1,1,1,1,0,0,0,0,0,1
+      ,1,1,1,1,1,1,1,1,1,1
+      ,1,1,1,1,1,1,1,1,1,1
+      ]
+  }
+
+gridWidth = 10
 
 -- Control Pacman
 handleKeys :: Event -> PacmanGame -> PacmanGame
@@ -47,35 +88,41 @@ step :: Float
 step = 5
 
 handleKeys (EventKey (Char 'w') _ _ _) game =
-	game { pacmanLoc = (currentLoc, up), lastMove = 0}
-		where
-			up = snd(pacmanLoc game) + step
-			currentLoc = fst(pacmanLoc game)
+  game { pacmanLoc = (currentLoc, up), lastMove = 0}
+    where
+      up = snd(pacmanLoc game) + step
+      currentLoc = fst(pacmanLoc game)
 
 handleKeys (EventKey (Char 's') _ _ _) game =
-	game { pacmanLoc = (currentLoc, down), lastMove = 1}
-		where
-			down = snd(pacmanLoc game) - step
-			currentLoc = fst(pacmanLoc game)
+  game { pacmanLoc = (currentLoc, down), lastMove = 1}
+    where
+      down = snd(pacmanLoc game) - step
+      currentLoc = fst(pacmanLoc game)
 
 handleKeys (EventKey (Char 'd') _ _ _) game =
-	game { pacmanLoc = (right, currentLoc), lastMove = 2 }
-		where
-			right = fst(pacmanLoc game) + step
-			currentLoc = snd(pacmanLoc game)
+  game { pacmanLoc = (right, currentLoc), lastMove = 2 }
+    where
+      right = fst(pacmanLoc game) + step
+      currentLoc = snd(pacmanLoc game)
 
 handleKeys (EventKey (Char 'a') _ _ _) game =
-	game { pacmanLoc = (left, currentLoc), lastMove = 3 }
-		where
-			left = fst(pacmanLoc game) - step
-			currentLoc = snd(pacmanLoc game)
+  game { pacmanLoc = (left, currentLoc), lastMove = 3 }
+    where
+      left = fst(pacmanLoc game) - step
+      currentLoc = snd(pacmanLoc game)
 
 handleKeys _ game = game
 
-tick seconds game = game { time = seconds}
+tick seconds game = game { time = t'}
+  where
+    -- Old locations and velocities.
+    t = time game
 
+    -- New locations.
+    t' = t + seconds
+
+-- update :: ViewPort -> Float -> PacmanGame -> PacmanGame
+update _ = tick
 
 main :: IO ()
-main = play window background 1 initialState render handleKeys tick
-
-
+main = play window background 30 initialState render handleKeys tick
