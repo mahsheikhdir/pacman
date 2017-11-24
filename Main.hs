@@ -19,14 +19,29 @@ data PacmanGame = Game
     gameMap :: [Integer]
   } deriving Show
 
+-- animate pacman properly
+orientation x
+  | x == 0 = 270	
+  | x == 1 = 90
+  | x == 2 = 0
+  | x == 3 = 180
 
+pA x
+  | even x = arcSolid 45 315 10
+  | odd x = circleSolid 10
 
 -- Drawing each game state
 render :: PacmanGame -> Picture
 render game =
   pictures [walls, pacman, clock]
   where
-    pacman = uncurry translate (pacmanLoc game) $ color yellow $ arcSolid 45 315 15
+    pacman = uncurry translate (pacmanLoc game) $ rotate face $ color yellow $ pacAnimation
+       where
+       	face = orientation (lastMove game)
+       	pacAnimation
+       	  | even (round (time game)) = arcSolid 45 315 10
+       	  | odd (round (time game)) = circleSolid 10
+
     current = (time game)
     timeString = show current
     clock = translate 200 200 $ scale 0.25 0.25 $ color white $ text timeString
@@ -39,7 +54,7 @@ wallColor = greyN 0.5
 wall x y =
   translate (x*25 - 125) (y*25 - 125) $
     color wallColor $
-      rectangleSolid 25 25
+      rectangleWire 25 25
 
 empty x y =
   translate (x*25) (y*25) $
@@ -85,7 +100,7 @@ handleKeys :: Event -> PacmanGame -> PacmanGame
 
 -- How far the pacman moves
 step :: Float
-step = 5
+step = 3
 
 handleKeys (EventKey (Char 'w') _ _ _) game =
   game { pacmanLoc = (currentLoc, up), lastMove = 0}
@@ -113,13 +128,34 @@ handleKeys (EventKey (Char 'a') _ _ _) game =
 
 handleKeys _ game = game
 
-tick seconds game = game { time = t'}
+tick seconds game = game { time = t', pacmanLoc = (x,y)}
   where
     -- Old locations and velocities.
     t = time game
 
     -- New locations.
     t' = t + seconds
+
+    -- Keeps moving from the start
+    curx = fst(pacmanLoc game)
+    cury = snd(pacmanLoc game)
+
+    lst = (lastMove game)
+
+    xCheck
+      | lst == 2 = curx + step
+      | lst == 3 = curx - step
+      | otherwise = curx
+
+    yCheck
+      | lst == 0 = cury + step
+      | lst == 1 = cury - step
+      | otherwise = cury
+
+    x = xCheck
+    y = yCheck
+
+
 
 -- update :: ViewPort -> Float -> PacmanGame -> PacmanGame
 update _ = tick
