@@ -16,8 +16,8 @@ type Location = (Float, Float)
 data SnakeGame = Game
   { loc :: Location,
     prevLoc :: [Location],
-  	snakeLength :: Float,
-  	foodLoc :: Location,
+    snakeLength :: Float,
+    foodLoc :: Location,
     time :: Float,
     lastMove :: Float,
     ended :: Bool
@@ -25,23 +25,30 @@ data SnakeGame = Game
 
 -- Drawing each game state
 render :: SnakeGame -> Picture
-render game =
-  pictures [snake, clock, food]
-  where
-    snake = uncurry translate (loc game) $ color white $ rectangleSolid 15 15
-    food = uncurry translate (foodLoc game) $ color orange $ rectangleSolid 15 15
+render game
+  |(ended game) =
+      pictures [translate (-200) 0 $ scale 0.5 0.5 $ color white $ text "Game Over"
+        ,translate (-200) (-80) $ scale 0.25 0.25 $ color white $ text "Press 'g' to restart"]
+  |otherwise =
+      pictures [snake, clock, food, xText, yText]
+        where
+          snake = uncurry translate (loc game) $ color white $ rectangleSolid 15 15
+          food = uncurry translate (foodLoc game) $ color orange $ rectangleSolid 15 15
 
-    current = (time game)
-    timeString = show current
-    clock = translate 200 230 $ scale 0.15 0.15 $ color white $ text timeString
+          current = (time game)
+          timeString = show current
+          clock = translate 200 230 $ scale 0.15 0.15 $ color white $ text timeString
+
+          xText = translate 200 200 $ scale 0.15 0.15 $ color white $  text (show (xHead game))
+          yText = translate 200 180 $ scale 0.15 0.15 $ color white $ text (show (yHead game))
 
 -- Initial state of the game
 initialState :: SnakeGame
 initialState = Game
   { loc = (0, 0),
-  	prevLoc = [],
-  	snakeLength = 1,
-  	foodLoc = (200, 1),
+    prevLoc = [],
+    snakeLength = 1,
+    foodLoc = (200, 1),
     time = 0,
     lastMove = 0, -- 0 up 1 down 2 right 3 left
     ended = False
@@ -80,9 +87,12 @@ handleKeys (EventKey (Char 'a') _ _ _) game =
     where
       left = (xHead game) - step
 
+handleKeys (EventKey (Char 'g') _ _ _) game =
+  initialState
+
 handleKeys _ game = game
 
-tick seconds game = game { time = t', loc = (x,y)}
+tick seconds game = game { time = t', loc = (x,y), ended = go}
   where
     -- Old locations and velocities.
     t = time game
@@ -109,12 +119,19 @@ tick seconds game = game { time = t', loc = (x,y)}
     x = xCheck
     y = yCheck
 
+    go = isGameOver game
+
     --check location
 
 
 
 -- update :: ViewPort -> Float -> SnakeGame -> SnakeGame
 update _ = tick
+
+isGameOver game
+  | (xHead game) < -250 || (xHead game) > 250 = True
+  | (yHead game) < -250 || (yHead game) > 250 = True
+  | otherwise = False
 
 main :: IO ()
 main = play window background 15 initialState render handleKeys tick
