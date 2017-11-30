@@ -2,6 +2,7 @@ module Main where
 
 import Graphics.Gloss
 import Graphics.Gloss.Interface.Pure.Game
+import System.Random
 
 window :: Display
 window = InWindow "snake" (500, 500) (0,0)
@@ -19,22 +20,23 @@ data SnakeGame = Game
     snakeLength :: Float,
     foodLoc :: Location,
     time :: Float,
-    lastMove :: Float,
+    nextMove :: Float,
     ended :: Bool
   }
 
 -- Drawing each game state
 render :: SnakeGame -> Picture
 render game
-  |(ended game) =
+  | (ended game) =
       pictures [translate (-200) 0 $ scale 0.5 0.5 $ color white $ text "Game Over"
         ,translate (-200) (-80) $ scale 0.25 0.25 $ color white $ text "Press 'g' to restart"]
-  |otherwise =
-      pictures [snake, body, clock, food, xText, yText]
+  | otherwise =
+      pictures [snake, clock, food, xText, yText, length, body]
         where
-          snake = uncurry translate (loc game) $ color white $ rectangleSolid 15 15
-          body = pictures (renderSnake (prevLoc game))
-          food = uncurry translate (foodLoc game) $ color orange $ rectangleSolid 15 15
+          snake = uncurry translate (loc game) $ color white $ rectangleSolid 10 10
+          food = uncurry translate (foodLoc game) $ color orange $ rectangleSolid 10 10
+
+          body = pictures (renderBody (prevLoc game) (snakeLength game) )
 
           current = (time game)
           timeString = show current
@@ -43,20 +45,24 @@ render game
           -- for debugging
           xText = translate 200 200 $ scale 0.15 0.15 $ color white $  text (show (xHead game))
           yText = translate 200 180 $ scale 0.15 0.15 $ color white $ text (show (yHead game))
+          length = translate 200 160 $ scale 0.15 0.15 $ color white $ text (show (snakeLength game))
 
-renderSnake [] = []
-renderSnake (coord:t) =
-  (uncurry translate coord $ color white $ rectangleSolid 15 15):renderSnake(t)
+renderBody :: [Location] -> Float -> [Picture]
+renderBody (h:t) i
+  | i > 0 = (uncurry translate h $ color white $ rectangleSolid 10 10) : renderBody t (i-1)
+
+renderBody [] _ = []
+renderBody _ 0 = []
 
 -- Initial state of the game
 initialState :: SnakeGame
 initialState = Game
   { loc = (0, 0),
     prevLoc = [],
-    snakeLength = 1,
-    foodLoc = (200, 1),
+    snakeLength = 3,
+    foodLoc = (200, 0),
     time = 0,
-    lastMove = 0, -- 0 up 1 down 2 right 3 left
+    nextMove = 0, -- 0 up 1 down 2 right 3 left 4 none
     ended = False
   }
 
@@ -70,77 +76,69 @@ yHead :: SnakeGame -> Float
 yHead game = snd(loc game)
 
 step :: Float
-step = 15
+step = 10
+
+
+-- snake can still go back in on it self
 
 handleKeys (EventKey (Char 'w') _ _ _) game =
-  game { loc = ((xHead game), up), lastMove = 0}
-    where
-      up = (yHead game) + step
-      currentLoc = xHead game
+  game { nextMove = 0}
 
 handleKeys (EventKey (Char 's') _ _ _) game =
-  game { loc = ((xHead game), down), lastMove = 1}
-    where
-      down = (yHead game) - step
+  game { nextMove = 1}
 
 handleKeys (EventKey (Char 'd') _ _ _) game =
-  game { loc = (right, (yHead game)), lastMove = 2 }
-    where
-      right = (xHead game) + step
+  game { nextMove = 2 }
 
 handleKeys (EventKey (Char 'a') _ _ _) game =
-  game { loc = (left, (yHead game)), lastMove = 3 }
-    where
-      left = (xHead game) - step
+  game { nextMove = 3 }
 
 handleKeys (EventKey (Char 'g') _ _ _) game =
   initialState
 
 handleKeys _ game = game
 
-tick seconds game = game { time = t', loc = (x,y), ended = go, prevLoc = snakeBody}
-  where
-    -- Old locations and velocities.
-    t = time game
+toMove :: Location -> Float -> Location
+toMove loc move
+  | move == 0 = (fst(loc), snd(loc) + step)
+  | move == 1 = (fst(loc), snd(loc) - step)
+  | move == 2 = (fst(loc) + step, snd(loc))
+  | move == 3 = (fst(loc) - step, snd(loc))
 
-    -- New locations.
-    t' = t + seconds
-
-    -- Keeps moving in the same direction
-    curx = xHead game
-    cury = yHead game
-
-    lst = (lastMove game)
-
-    xCheck
-      | lst == 2 = curx + step
-      | lst == 3 = curx - step
-      | otherwise = curx
-
-    yCheck
-      | lst == 0 = cury + step
-      | lst == 1 = cury - step
-      | otherwise = cury
-
-    x = xCheck
-    y = yCheck
-
-    snakeBody = updateSnakebody (isTouchingFood game) (curx,cury) (prevLoc game)
-
-    go = isGameOver game
+eatFood :: Location -> Location -> Float -> Float
+eatFood snake food length
+  | snake == food = length + 1
+  | otherwise = length
 
 
-    --check location
-updateSnakebody False _ [] = []
-updateSnakebody ateFood coord list
-  | ateFood == False = (coord):removeLast(list)
-  |otherwise = (coord):list
+tick seconds game
+  | (ended game) = game
+  |otherwise = game { time = t', loc = newLoc, prevLoc = toAdd, snakeLength = newLength, ended = go, foodLoc = newFoodLoc}
+    where
+      -- Old locations and velocities.
+      t = time game
 
-removeLast [h] = []
-removeLast [] = []
-removeLast (h:t) = h:removeLast(t)
+      -- New locations.
+      t' = t + seconds
+
+      -- Keeps moving in the same direction
+
+      toAdd = (loc game) : (prevLoc game)
+      newLength = eatFood (loc game) (foodLoc game) (snakeLength game)
+
+      newFoodLoc =
+        if (loc game) == (foodLoc game)
+          then generateRandomCoordinates (round (t * 100000))
+          else (foodLoc game)
+      newLoc = toMove (loc game) (nextMove game)
+      go = isGameOver game
 
 
+generateRandomCoordinates t = do
+  let s1 = mkStdGen t
+  let (i1, s2) = randomR (-25, 25 :: Int) s1
+  let (i2,  _) = randomR (-25, 25 :: Int) s2
+  ((fromIntegral i1 * 10),(fromIntegral i2 * 10))
 
 -- update :: ViewPort -> Float -> SnakeGame -> SnakeGame
 update _ = tick
@@ -148,11 +146,16 @@ update _ = tick
 isGameOver game
   | (xHead game) < -250 || (xHead game) > 250 = True
   | (yHead game) < -250 || (yHead game) > 250 = True
+  | isSelfColliding (snakeLength game) (loc game) (prevLoc game) 0 = True
   | otherwise = False
 
-isTouchingFood game =
-  abs(fst(loc game) - fst(foodLoc game)) < 15 && abs(snd(loc game) - snd(foodLoc game)) < 15
+
+isSelfColliding :: Float -> Location -> [Location] -> Float -> Bool
+isSelfColliding _ _ [] _ = False
+isSelfColliding len c1 (c2:t) acc
+  | acc < len =  c1 == c2 || (isSelfColliding len c1 t (acc+1))
+  | otherwise = False
 
 
 main :: IO ()
-main = play window background 15 initialState render handleKeys tick
+main = play window background 10 initialState render handleKeys tick
