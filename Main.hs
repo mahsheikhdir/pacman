@@ -30,17 +30,23 @@ render game
       pictures [translate (-200) 0 $ scale 0.5 0.5 $ color white $ text "Game Over"
         ,translate (-200) (-80) $ scale 0.25 0.25 $ color white $ text "Press 'g' to restart"]
   |otherwise =
-      pictures [snake, clock, food, xText, yText]
+      pictures [snake, body, clock, food, xText, yText]
         where
           snake = uncurry translate (loc game) $ color white $ rectangleSolid 15 15
+          body = pictures (renderSnake (prevLoc game))
           food = uncurry translate (foodLoc game) $ color orange $ rectangleSolid 15 15
 
           current = (time game)
           timeString = show current
           clock = translate 200 230 $ scale 0.15 0.15 $ color white $ text timeString
 
+          -- for debugging
           xText = translate 200 200 $ scale 0.15 0.15 $ color white $  text (show (xHead game))
           yText = translate 200 180 $ scale 0.15 0.15 $ color white $ text (show (yHead game))
+
+renderSnake [] = []
+renderSnake (coord:t) =
+  (uncurry translate coord $ color white $ rectangleSolid 15 15):renderSnake(t)
 
 -- Initial state of the game
 initialState :: SnakeGame
@@ -92,7 +98,7 @@ handleKeys (EventKey (Char 'g') _ _ _) game =
 
 handleKeys _ game = game
 
-tick seconds game = game { time = t', loc = (x,y), ended = go}
+tick seconds game = game { time = t', loc = (x,y), ended = go, prevLoc = snakeBody}
   where
     -- Old locations and velocities.
     t = time game
@@ -119,9 +125,20 @@ tick seconds game = game { time = t', loc = (x,y), ended = go}
     x = xCheck
     y = yCheck
 
+    snakeBody = updateSnakebody (isTouchingFood game) (curx,cury) (prevLoc game)
+
     go = isGameOver game
 
+
     --check location
+updateSnakebody False _ [] = []
+updateSnakebody ateFood coord list
+  | ateFood == False = (coord):removeLast(list)
+  |otherwise = (coord):list
+
+removeLast [h] = []
+removeLast [] = []
+removeLast (h:t) = h:removeLast(t)
 
 
 
@@ -132,6 +149,10 @@ isGameOver game
   | (xHead game) < -250 || (xHead game) > 250 = True
   | (yHead game) < -250 || (yHead game) > 250 = True
   | otherwise = False
+
+isTouchingFood game =
+  abs(fst(loc game) - fst(foodLoc game)) < 15 && abs(snd(loc game) - snd(foodLoc game)) < 15
+
 
 main :: IO ()
 main = play window background 15 initialState render handleKeys tick
