@@ -21,7 +21,8 @@ data SnakeGame = Game
     foodLoc :: Location,
     time :: Float,
     nextMove :: Float,
-    ended :: Bool
+    ended :: Bool,
+    control :: Bool -- True computer False human
   }
 
 -- Drawing each game state
@@ -34,7 +35,7 @@ render game
       pictures [snake, clock, food, xText, yText, length, body]
         where
           snake = uncurry translate (loc game) $ color white $ rectangleSolid 10 10
-          food = uncurry translate (foodLoc game) $ color orange $ rectangleSolid 10 10
+          food = uncurry translate (foodLoc game) $ color yellow $ rectangleSolid 10 10
 
           body = pictures (renderBody (prevLoc game) (snakeLength game) )
 
@@ -60,13 +61,13 @@ initialState = Game
   { loc = (0, 0),
     prevLoc = [],
     snakeLength = 3,
-    foodLoc = (200, 0),
+    foodLoc = (0, 200),
     time = 0,
     nextMove = 0, -- 0 up 1 down 2 right 3 left 4 none
-    ended = False
+    ended = False,
+    control = True
   }
 
--- Control snake
 handleKeys :: Event -> SnakeGame -> SnakeGame
 
 xHead :: SnakeGame -> Float
@@ -77,9 +78,6 @@ yHead game = snd(loc game)
 
 step :: Float
 step = 10
-
-
--- snake can still go back in on it self
 
 handleKeys (EventKey (Char 'w') _ _ _) game =
   game { nextMove = 0}
@@ -104,6 +102,17 @@ toMove loc move
   | move == 1 = (fst(loc), snd(loc) - step)
   | move == 2 = (fst(loc) + step, snd(loc))
   | move == 3 = (fst(loc) - step, snd(loc))
+
+closestToFood :: Location -> Location -> Float
+closestToFood loc food
+  | (fst(food) == fst(loc) && snd(food) > snd(loc)) = 0
+  | (fst(food) == fst(loc) && snd(food) < snd(loc)) = 1
+  | (snd(food) == snd(loc) && fst(food) > fst(loc)) = 2
+  | (snd(food) == snd(loc) && fst(food) < fst(loc)) = 3
+  | (fst(food) > fst(loc) && snd(food) > snd(loc)) = 0
+  | (fst(food) > fst(loc) && snd(food) < snd(loc)) = 1
+  | (fst(food) < fst(loc) && snd(food) > snd(loc)) = 0
+  | (fst(food) < fst(loc) && snd(food) < snd(loc)) = 1
 
 eatFood :: Location -> Location -> Float -> Float
 eatFood snake food length
@@ -130,7 +139,12 @@ tick seconds game
         if (loc game) == (foodLoc game)
           then generateRandomCoordinates (round (t * 100000))
           else (foodLoc game)
-      newLoc = toMove (loc game) (nextMove game)
+
+
+      newLoc 
+      	| (control game) = toMove (loc game) (closestToFood (loc game) newFoodLoc)
+      	| otherwise = toMove (loc game) (nextMove game)
+
       go = isGameOver game
 
 
@@ -146,7 +160,7 @@ update _ = tick
 isGameOver game
   | (xHead game) < -250 || (xHead game) > 250 = True
   | (yHead game) < -250 || (yHead game) > 250 = True
-  | isSelfColliding (snakeLength game) (loc game) (prevLoc game) 0 = True
+  | isSelfColliding (snakeLength game) (loc game) (prevLoc game) 0 = False
   | otherwise = False
 
 
@@ -157,5 +171,6 @@ isSelfColliding len c1 (c2:t) acc
   | otherwise = False
 
 
+
 main :: IO ()
-main = play window background 10 initialState render handleKeys tick
+main = play window background 200 initialState render handleKeys tick
