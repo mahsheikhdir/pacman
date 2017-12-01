@@ -24,8 +24,9 @@ data SnakeGame = Game
     ended :: Bool,
     control :: Bool, -- True computer False human
     menu :: Bool,
-    difficulty :: Int,
-    frameTracker :: Int
+    difficulty :: Int,-- 3 being eazy and 1 being hard
+    frameTracker :: Int,
+    aiPath :: [Float]
   }
 
 step :: Float
@@ -46,7 +47,7 @@ render game
         ,translate (-150) (-120) $ scale 0.1 0.10 $ color (modeColor game 1) $ text "(H)ard"
         ,translate (-100) (-150) $ scale 0.2 0.2 $ color white $ text "Start (G)ame"]
   | otherwise =
-      pictures [snake, clock, food, xText, yText, length, body]
+      pictures [snake, clock, food, xText, yText, length, body, aiDir]
         where
           snake = uncurry translate (loc game) $ color white $ rectangleSolid 10 10
           food = uncurry translate (foodLoc game) $ color yellow $ rectangleSolid 10 10
@@ -57,10 +58,17 @@ render game
           timeString = show current
           clock = translate 200 230 $ scale 0.15 0.15 $ color white $ text timeString
 
-          -- for debugging
+          -- for debuggin
           xText = translate 200 200 $ scale 0.15 0.15 $ color white $  text (show (xHead game))
           yText = translate 200 180 $ scale 0.15 0.15 $ color white $ text (show (yHead game))
           length = translate 200 160 $ scale 0.15 0.15 $ color white $ text (show (snakeLength game))
+
+          dir
+            |(aiPath game) == [] = 5
+            |otherwise = (head (aiPath game))
+
+          aiDir = translate 200 220 $ scale 0.15 0.15 $ color white $ text (show dir)
+
           humanColor =
             if (control game)
               then white
@@ -94,7 +102,8 @@ initialState = Game
     control = False,
     menu = True,
     difficulty = 2,
-    frameTracker = 0
+    frameTracker = 0,
+    aiPath = []
   }
 
 
@@ -157,6 +166,8 @@ toMove loc move
   | move == 1 = (fst(loc), snd(loc) - step)
   | move == 2 = (fst(loc) + step, snd(loc))
   | move == 3 = (fst(loc) - step, snd(loc))
+  -- handle move from ai path where it cannot find a path
+  | move == 5 = (fst(loc) - step, snd(loc))
 
 closestToFood :: Location -> Location -> Float
 closestToFood loc food
@@ -174,7 +185,55 @@ eatFood snake food length
   | snake == food = length + 1
   | otherwise = length
 
+compPath :: Location -> Location -> [Location] -> Float -> [Float]
+compPath loc food prevLoc len
+  | food == loc = []
+  | not(isSelfColliding len move_0 prevLoc 0) && (path_0 == [] || (head(path_0) /= 5))
+        = (0 : path_0)
+  | not(isSelfColliding len move_1 prevLoc 0) && (path_1 == [] || (head(path_1) /= 5))
+        = (1 : path_1)
+  | not(isSelfColliding len move_2 prevLoc 0) && (path_2 == [] || (head(path_2) /= 5))
+        = (2 : path_2)
+  -- | not(isSelfColliding len move_3 prevLoc 0) && (path_3 == [] || (head(path_3) /= 5))
+  --       = (3 : path_3)
+  | otherwise = [5] -- no solutions will crash anyways
+    where
+      dirs = [0,1,2,3]
+      move_0 = toMove loc (closestToFood loc food)
+      path_0 = (compPath move_0 food (loc:prevLoc) len)
 
+      move_1 = toMove loc (dirs!!1)
+      path_1 = (compPath move_1 food (loc:prevLoc) len)
+
+      move_2 = toMove loc (dirs!!2)
+      path_2 = (compPath move_2 food (loc:prevLoc) len)
+      --
+      move_3 = toMove loc (dirs!!3)
+      path_3 = (compPath move_3 food (loc:prevLoc) len)
+
+getShortestDirections (x1,y1) (x2,y2) = result
+  where
+    dx = x2 - x1
+    dy = y2 - y1
+
+    hor_dir
+      | dx > 0 = [2,3]
+      | dx < 0 = [3,2]
+      | otherwise = [2,3]
+
+    ver_dir
+      | dy > 0 = [0,1]
+      | dy < 0 = [1,0]
+      | otherwise = [0,1]
+
+    adx = abs dx
+    ady = abs dy
+    result
+      | adx == 0 = [head ver_dir, head hor_dir, last hor_dir, last ver_dir]
+      | ady == 0 = [head hor_dir, head ver_dir, last ver_dir, last hor_dir]
+      | adx < ady = [head ver_dir, head hor_dir, last hor_dir, last ver_dir]
+      | adx > ady = [head hor_dir, head ver_dir, last ver_dir, last hor_dir]
+      | otherwise = [head ver_dir, head hor_dir, last hor_dir, last ver_dir]
 tick seconds game
   | (ended game) || (menu game) = game
   | (frameTracker game) == 0 =
@@ -184,6 +243,7 @@ tick seconds game
             snakeLength = newLength,
             ended = go,
             foodLoc = newFoodLoc,
+            aiPath = newAiPath,
             frameTracker = ft'}
   | otherwise = game {time = t', frameTracker = ft'}
         where
@@ -207,10 +267,15 @@ tick seconds game
               then generateRandomCoordinates (round (t * 100000))
               else (foodLoc game)
 
+          curAiPath
+            | (aiPath game) == [] = compPath (loc game) newFoodLoc (prevLoc game) newLength
+            | otherwise = (aiPath game)
 
           newLoc
-            | (control game) = toMove (loc game) (closestToFood (loc game) newFoodLoc)
+            | (control game) = toMove (loc game) (head curAiPath)
             | otherwise = toMove (loc game) (nextMove game)
+
+          newAiPath = tail (curAiPath)
 
           go = isGameOver game
 
