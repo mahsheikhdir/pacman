@@ -189,17 +189,18 @@ compPath :: Location -> Location -> [Location] -> Float -> [Float]
 compPath loc food prevLoc len
   | food == loc = []
   | not(isSelfColliding len move_0 prevLoc 0) && (path_0 == [] || (head(path_0) /= 5))
-        = (0 : path_0)
+        = ((dirs!!0) : path_0)
   | not(isSelfColliding len move_1 prevLoc 0) && (path_1 == [] || (head(path_1) /= 5))
-        = (1 : path_1)
+        = ((dirs!!1) : path_1)
   | not(isSelfColliding len move_2 prevLoc 0) && (path_2 == [] || (head(path_2) /= 5))
-        = (2 : path_2)
-  -- | not(isSelfColliding len move_3 prevLoc 0) && (path_3 == [] || (head(path_3) /= 5))
-  --       = (3 : path_3)
+        = ((dirs!!2) : path_2)
+  | not(isSelfColliding len move_3 prevLoc 0) && (path_3 == [] || (head(path_3) /= 5))
+        = ((dirs!!3) : path_3)
   | otherwise = [5] -- no solutions will crash anyways
     where
-      dirs = [0,1,2,3]
-      move_0 = toMove loc (closestToFood loc food)
+      dirs = getShortestDirections loc food
+
+      move_0 = toMove loc (dirs!!0)
       path_0 = (compPath move_0 food (loc:prevLoc) len)
 
       move_1 = toMove loc (dirs!!1)
@@ -268,14 +269,17 @@ tick seconds game
               else (foodLoc game)
 
           curAiPath
-            | (aiPath game) == [] = compPath (loc game) newFoodLoc (prevLoc game) newLength
+            | (aiPath game) == [] && (control game) =
+              compPath (loc game) newFoodLoc (prevLoc game) newLength
             | otherwise = (aiPath game)
 
           newLoc
             | (control game) = toMove (loc game) (head curAiPath)
             | otherwise = toMove (loc game) (nextMove game)
 
-          newAiPath = tail (curAiPath)
+          newAiPath
+            | (control game) = tail (curAiPath)
+            | otherwise = curAiPath
 
           go = isGameOver game
 
